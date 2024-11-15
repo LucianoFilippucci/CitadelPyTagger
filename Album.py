@@ -1,14 +1,18 @@
 
 class Album:
-    def __init__(self, name, artist, tracks, published, album_mbid=None):
+    def __init__(self, name, artist, tracks, published, album_mbid=None, spotify_album_id = None):
         self.__name = name
         self.__artist = artist
         self.__tracks = tracks
         self.__published = published
         self.__album_mbid = album_mbid
+        self.__spotify_album_id = spotify_album_id
 
     def get_name(self):
         return self.__name
+    
+    def get_spotify_album_id(self):
+        return self.__spotify_album_id
     
     def get_artist(self):
         return self.__artist
