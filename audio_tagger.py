@@ -11,218 +11,67 @@ from Artist import Artist
 from Album import Album
 from Track import Track
 from datetime import datetime
+from DataService.Spotify import Spotify
+import logging
+
 
 load_dotenv()
+logging.basicConfig(
+    level=logging.INFO,
+    filename= "logs/app.log",
+    format= "%(asctime)s - %(levelname)s - %(message)s",
+    )
 
 
-def search_artist(artist_name) -> Artist:
-    params = {
-            'method': 'artist.getinfo',
-            'artist': artist_name,
-            'api_key': os.getenv("LASTFM_API_KEY"),
-            'format': 'json'
-        }
-    response = requests.get(os.getenv("LASTFM_API_URL"), params = params)
-    if response.status_code == 200:
-        pretty_json = json.dumps(response.json(), indent = 4)
-        with open('artist_response.json', 'w') as file:
-            file.write(pretty_json)
-        
-        tags = [tag["name"] for tag in response['artist']['tags']['tag']]
-
-        return Artist(
-            name = response['artist']['name'],
-            mbid = response['artist']['mbid'],
-            tags= tags
-        )
-
-def retrive_image_from_musicbrainz(img_url, type):
-    URL = os.getenv("MUSICBRAINZ_API_URL")
-
-    match type:
-        case "artist":
-            URL += "artist/"
-        case "track":
-            URL += ""
-        case "album":
-            URL += ""
-    
-    params = {
-        'query': '',
-        'fmt': 'json'
-    }
-
-    headers  = {
-        "User-Agent": os.getenv("USER_AGENT")
-    }
-
-    response = requests.get(URL, params= params, headers= headers)
-
-    if response.status_code == 200:
-        data = response.json()
-
-
-def search_artist_song(artist_name, song_name) -> Track:
-    # URI = LASTFM_API_URL + "?method=artist.getinfo&artist=Cher&api_key=YOUR_API_KEY&format=json"
-    params = {
-        'method': 'track.getinfo',
-        'artist': artist_name,
-        'track': song_name,
-        'api_key': os.getenv("LASTFM_API_KEY"),
-        'format': 'json'
-    }
-
-    
-
-    response = requests.get(os.getenv("LASTFM_API_URL"), params = params)
-    if response.status_code == 200:
-        pretty_json = json.dumps(response.json(), indent = 4)
-        with open('track_response.json', 'w') as file:
-            file.write(pretty_json)
-        
-        # artist_mbid = response.json()['track']['artist']['mbid'] if  response.json()['track']['artist']['mbid'] else None
-        artist_mbid = response.json().get('track', {}).get('artist', {}).get('mbid', None)
-        album = search_album(
-            album_name = response.json()['track']['album']['title'],
-            album_artist = response.json()['track']['artist']['name']
-        )    
-
-        date_object = datetime.strptime(album.get_published, "%d %b %Y, %H:%M")
-        formatted_date = date_object.strftime("%Y-%m-%dT%H:%M:%S")
-
-
-        return Track(
-            name = response.json()['track']['name'],
-            duration = response.json()['track']['duration'],
-            album_title = response.json()['track']['album']['title'],
-            artist_mbid = artist_mbid,
-            artist_name = response.json()['track']['artist']['name'],
-            track_number = get_track_index(response.json(), album.tracks),
-            track_published = formatted_date
-        )
-        
-        
-
-        
-    else:
-        print(f"Error: {response.status_code}")
-
-def get_track_index(response, album: Album):
-    for index, track in enumerate(album.get_tracks):
-            if track == response['track']['name']:
-                return index;
-
-def search_album(album_name=None, album_artist=None, album_mbid=None) -> Album:
-    params = {
-                'method': 'album.getinfo',
-                'album': album_name,
-                'api_key': os.getenv("LASTFM_API_KEY"),
-                'format': 'json'
-    }
-    if album_artist:
-        params['artist'] = album_artist
-        response = requests.get(os.getenv("LASTFM_API_URL"), params = params)
-        if response.status_code == 200:
-            pretty_json = json.dumps(response.json(), indent = 4)
-            with open('album_response.json', 'w') as file:
-                file.write(pretty_json)
-            
-            track_list = [track["name"] for track in response.json()['album']['tracks']['track']]
-
-            return Album(
-                name = response.json()['album']['name'],
-                artist = response.json()['album']['artist'],
-                tracks = track_list,
-                published = response.json()['album']['wiki']['published'],
-                album_mbid = response.json()['album']['mbid'] if response.json()['album']['mbid'] else None
-            )
-    
-
-
-def tagger(directory):
+def tagger(directory, data_service):
     dir = Path(directory)
     file_count = sum(1 for f in dir.iterdir() if f.is_file())
+    print(f"Found {file_count} files in the given directory.\n")
+
     for entry in dir.iterdir():
         if entry.is_file():
-            # audio = MP3(entry)
-            # print(f"audio title: {audio.get('TIT2')}")
-            # print(f"You're editing the song: {entry.name}")
-            # song_title = input("Title (blank for default): ")
-            # if song_title: 
-            #     audio['TIT2'] = TIT2(encoding=3, text = song_title)
-            
-            # song_artist = input("Artist (leave blank for default): ")
-            # if song_artist:
-            #     audio['TPE1'] = TPE1(encoding=3, text = song_artist)
-            
-            # song_album = input("Album Name (blank for default): ")
-            # if song_album:
-            #     audio['TALB'] = TALB(encoding = 3, text = song_album)
-            
-            # song_genre = input("Song Genre (blank for default): ")
-            # if song_genre:
-            #     audio['TCON'] = TCON(encoding = 3, text = song_genre)
-            # audio.save()
-            # return
             audio = MP3(entry)
             print(f"Editing: {entry.name}")
             song_name = ""
             while not song_name:
                 song_name = input("Track Name: ")
+            if(song_name[0] == "-" and song_name[1] == "s"):
+                print(f"Skipping {entry.name}")
+                print("========================================================")
+                continue
             artist_name = input("Artist Name: ")
             while not artist_name:
                 artist_name = input("Artist Name: ")
-            
-            track = search_artist_song(artist_name, song_name)
+
+            metadata_service = None
+            match data_service:
+                case "spotify":
+                    metadata_service = Spotify()
+                case _:
+                    logging.error(f"Invalid Data Service: {data_service}")
+                    print("An Error Occurred Check app.log.")
+                    exit -1
+
+            track, album = metadata_service.search_track(song_name, artist_name)
             if track:
-                audio['TIT2'] = TIT2(encoding = 3, text = track.get_name)
-                audio['TPE1'] = TPE1(encoding = 3, text = track.get_artist)
-                audio['TALB'] = TALB(encoding = 3, text = track.get_album_title)
-                audio['TRCK'] = TRCK(encoding = 3, text = [f"{track.get_track_number}"])
-                audio['TDRC'] = TDRC(encoding = 3, text = track.get_published)
+                audio['TIT2'] = TIT2(encoding = 3, text = track.get_name())
+                audio['TPE1'] = TPE1(encoding = 3, text = track.get_artist())
+                audio['TALB'] = TALB(encoding = 3, text = track.get_album_title())
+                audio['TRCK'] = TRCK(encoding = 3, text = [f"{track.get_track_number()}"])
+                audio['TDRC'] = TDRC(encoding = 3, text = track.get_track_published())
                 print("================================================================")
                 for tag in audio.keys():
                     print(f"{tag}: {audio[tag]}")
                 print("================================================================")
                 audio.save()
+                new_name = f"{track.get_artist()} - {track.get_name()}" + entry.suffix
+                new_file_path = entry.parent  / new_name
+                entry.rename(new_file_path)
                 # TODO: an Else to log the track's that couldn't be tagged
 
 
-    print(f"Number of files: {file_count}")
-
-def search_artist_MUSICBRAINZ(artist_name) -> str:
-    URI =  os.getenv("") + "artist/"
-    params = {
-        'query': artist_name,
-        'fmt': 'json'
-    }
-
-    print(f"URI: {URI}")
-
-    response = requests.get(URI, params=params)
-
-    if response.status_code == 200:
-        data = response.json()
-        artists = data.get('artists', [])
-        if artists:
-            
-            for index, artist in enumerate(artists, start = 0):
-                print(f"SELECTION ID: {index}")
-                print(f"Artist: {artist['name']}")
-                print(f"ID: {artist['id']}")
-                print(f"Disambiguation: {artist.get('disambiguation', 'N/A')}")
-                print("-------------------------------------------------------")
-        else:
-            print("No artists found.")
-            return ""
-        selection = int(input("Which Artist do you Want: "))
-        return artists[selection]['id']
-    else:
-        print(f"Error: {response}")
-        return ""
 
     
-
 def main():
     parser = argparse.ArgumentParser(description="a script to demonstrate argparse")
 
@@ -230,11 +79,13 @@ def main():
     parser.add_argument("-sa", "--search-artist", type=str, default= "", help = "Search for Artist Name")
     parser.add_argument("-sn", "--song-name", type = str, default = "", help = "Search for Artist Song")
     parser.add_argument("-sA", "--search-album", type = str, default = "", help= "Search for Album")
+    parser.add_argument("--data-service", type= str, required= True, help= "Metadata Service: spotify, lastfm, musicbrainz")
+
 
     args = parser.parse_args()
 
     if args.directory:
-        tagger(args.directory)
+        tagger(args.directory, args.data_service)
 
     if args.search_artist and args.song_name:
         # artist_name = input("Artist Name: ")
