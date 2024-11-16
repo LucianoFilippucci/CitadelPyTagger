@@ -70,6 +70,10 @@ def tagger(directory, data_service):
                 # TODO: an Else to log the track's that couldn't be tagged
 
 
+<<<<<<< HEAD
+=======
+    print(f"Number of files: {file_count}")
+>>>>>>> 041f57c2a8f7ed533a77896cc72e8d4514841e2e
 
     
 def main():
